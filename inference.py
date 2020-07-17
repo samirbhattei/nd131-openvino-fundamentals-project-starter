@@ -36,32 +36,63 @@ class Network:
 
     def __init__(self):
         ### TODO: Initialize any class variables desired ###
+        self.ie_network = None
+        self.loaded_model = None
+        self.model_input = None
+        self.model_output = None
 
-    def load_model(self):
+    def load_model(self, data):
         ### TODO: Load the model ###
+        xml_model = data["model"]
+        bin_model = os.path.splitext(xml_model)[0] + ".bin"
+        
+        ie_engine = IECore()
+        self.ie_network = IENetwork(model=xml_model, weights=bin_model)
         ### TODO: Check for supported layers ###
+        layers_supported = ie_engine.query_network(self.ie_network, device_name='CPU')
+        layers = self.ie_network.layers.keys()
+        flag_unsupported_layer = None
+        for l in layers:
+            if l not in layers_supported:
+                flag_unsupported_layer = True
+            
         ### TODO: Add any necessary extensions ###
+        if flag_unsupported_layer: 
+            ie_engine.add_extension(data["cpu_extension"], data["device"])
+            
+        self.loaded_model = ie_engine.load_network(self.ie_network, data["device"])
+        self.model_input = next(iter(self.ie_network.inputs))
+        self.model_output = next(iter(self.ie_network.outputs))
         ### TODO: Return the loaded inference plugin ###
         ### Note: You may need to update the function parameters. ###
-        return
+        return self.model_input, self.model_output
 
     def get_input_shape(self):
         ### TODO: Return the shape of the input layer ###
-        return
+        input_shapes = {}
+        for inp in self.ie_network.inputs:
+            input_shapes[inp] = (self.ie_network.inputs[inp].shape)
+        return input_shapes
 
-    def exec_net(self):
+    def exec_net(self, input_dict, request):
         ### TODO: Start an asynchronous request ###
         ### TODO: Return any necessary information ###
+        inference_request_handler = self.loaded_model.start_async(
+                request_id=request, 
+                inputs=input_dict)
         ### Note: You may need to update the function parameters. ###
-        return
+        return inference_request_handler
 
-    def wait(self):
+    def wait(self, inference_request):
         ### TODO: Wait for the request to be complete. ###
         ### TODO: Return any necessary information ###
         ### Note: You may need to update the function parameters. ###
-        return
+        status = inference_request.wait()
+        return status
 
-    def get_output(self):
+    def get_output(self, inference_request, output):
         ### TODO: Extract and return the output results
         ### Note: You may need to update the function parameters. ###
-        return
+        out = inference_request.outputs[output]
+        return out
+
